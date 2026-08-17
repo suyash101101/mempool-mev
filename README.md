@@ -1,30 +1,39 @@
-# Lab A — Mempool & Fee Priority
+# Mempool Fee-Race Lab (`mempool-mev`)
 
 **Web3 Uncovered · Road to Devcon · Session 1**
 
 > What happens between **Confirm** and **Confirmed**? Your transaction sits in a **public waiting room** (the mempool) where anyone can read it and block builders pick by fee.
 
-Pair with **Lab B:** [`sandwich-attack`](https://github.com/suyash101101/sandwich-attack) — shows how bots profit from that visibility.
-
-**Documentation in this repo:**
-
-| File | Who it is for |
-|------|---------------|
-| [`README.md`](./README.md) | Quick setup + run commands (start here) |
-| [`GUIDE.md`](./GUIDE.md) | Full explanation, privacy angle, layperson analogies |
-| [`SPEAKER_NOTES.md`](./SPEAKER_NOTES.md) | Presenter script — what to say live, timing, Q&A |
+Pair with **sandwich lab:** [`sandwich-attack`](https://github.com/suyash101101/sandwich-attack) — shows how bots profit from that visibility.
 
 ---
 
-## The privacy crux
+## Base fee vs priority tip (EIP-1559)
 
-| Fact | Implication |
-|------|-------------|
-| Pending txs are **public** | Amount, target contract, and calldata are visible before confirmation |
-| Block space is scarce | Higher fee tip → higher inclusion priority |
-| RPC nodes expose the txpool | Searchers watch the same feed you will inspect below |
+| Part | Who sets it | Where it goes | What it means |
+|------|-------------|---------------|---------------|
+| **Base fee** | Network (per block) | **Burned** | Minimum price for block space. Rises when blocks are full. |
+| **Priority fee (tip)** | **You** | Validator / builder | Your bid to jump the queue. Higher tip → included sooner & ordered first. |
 
-This lab does **not** run an attack. It proves the infrastructure that makes MEV possible.
+**You pay roughly:** `gas used × (base fee + tip)`
+
+MetaMask labels these as **max fee** and **priority fee**.
+
+### Why this lab uses plain `gasPrice`
+
+On mainnet, txs are usually **EIP-1559** (`maxFeePerGas` + `maxPriorityFeePerGas`).  
+For teaching, `demo.sh` sends **legacy** txs with a single `gasPrice` so you can read **1 gwei vs 50 gwei** directly in `txpool_content`.
+
+| Hex in txpool | Decimal | Meaning |
+|---------------|---------|---------|
+| `0x3b9aca00` | 1,000,000,000 | **1 gwei** (low bid) |
+| `0xba43b7400` | 50,000,000,000 | **50 gwei** (high bid) |
+
+Decode yourself:
+```bash
+cast --to-wei 1 gwei
+cast --to-wei 50 gwei
+```
 
 ---
 
@@ -51,15 +60,11 @@ forge build
 forge test -vv
 ```
 
-Expected:
-
-```text
-[PASS] test_pingIncrements()
-```
+Expected: `[PASS] test_pingIncrements()`
 
 ---
 
-## Run end-to-end
+## Run end-to-end (recommended)
 
 ### Terminal A — slow blocks (time to inspect the pool)
 
@@ -67,48 +72,73 @@ Expected:
 anvil --block-time 8 --port 8545
 ```
 
-### Terminal B — deploy + submit two competing txs
+### Terminal B — deploy + fee race
 
 ```bash
-forge script script/FeeRace.s.sol:FeeRaceScript \
-  --broadcast \
-  --rpc-url http://127.0.0.1:8545 \
-  -vv
+chmod +x demo.sh
+./demo.sh
 ```
 
-### Terminal C (optional) — peek at the public mempool
-
-Run **after** Terminal B submits, **before** the next block mines:
+### Terminal C — when `demo.sh` pauses (before next block mines)
 
 ```bash
 cast rpc txpool_content --rpc-url http://127.0.0.1:8545
 ```
 
-### Verify the high-tip tx won
+**You should see two pending txs:**
 
-Replace `<PING_ADDR>` with the address printed by the script:
+- `from` `0x7099...` → `gasPrice` `0x3b9aca00` (1 gwei)
+- `from` `0x3C44...` → `gasPrice` `0xba43b7400` (50 gwei)
+- same `to` (Ping contract address printed by demo)
 
+Press Enter in Terminal B to finish.
+
+---
+
+## Verification checklist
+
+Run through this to confirm everything works before the workshop:
+
+| # | Check | Command | Pass if |
+|---|-------|---------|---------|
+| 1 | Tests green | `forge test -vv` | `[PASS] test_pingIncrements()` |
+| 2 | Anvil up | `cast block-number --rpc-url http://127.0.0.1:8545` | returns a number |
+| 3 | Two pending txs | `cast rpc txpool_content ...` (during pause) | 2 entries, different `gasPrice` |
+| 4 | Gas on mined txs | `cast tx <HASH> \| grep gasPrice` | `1000000000` and `50000000000` |
+| 5 | Block order | high-tip tx **before** low-tip in same block | 50 gwei tx first |
+
+**Note on `lastCaller`:** Ping stores whoever called **last** in the block. If both txs fit, high tip runs first, low tip runs second → `lastCaller` may be the **low-tip** account. That is correct. The lesson is **ordering by tip**, not `lastCaller`.
+
+Check block order:
 ```bash
-cast call <PING_ADDR> "lastCaller()(address)" --rpc-url http://127.0.0.1:8545
-# Expected: 0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC  (Anvil account #2, 50 gwei)
+cast tx <HIGH_HASH> --rpc-url http://127.0.0.1:8545 | grep blockNumber
+cast tx <LOW_HASH>  --rpc-url http://127.0.0.1:8545 | grep blockNumber
+# Same block → compare transactionIndex or run demo.sh output
 ```
 
 ---
 
-## What the script does
+## Alternative (forge only — not ideal for live txpool demo)
 
-1. Deploys `Ping.sol` (increments a counter)
-2. Account #1 calls `ping()` at **1 gwei**
-3. Account #2 calls `ping()` at **50 gwei**
-4. Both wait in the txpool; the higher tip gets priority in the next block
+`forge script --broadcast` sends txs **one-by-one** and waits for each to mine, so you usually **won't** see both pending at once:
+
+```bash
+forge script script/FeeRace.s.sol:FeeRaceScript \
+  --broadcast --legacy \
+  --rpc-url http://127.0.0.1:8545 -vv
+```
+
+Use **`./demo.sh`** for the live audience moment.
 
 ---
 
-## Layout
+## What each file does
 
 ```text
-src/Ping.sol           # on-chain target
-script/FeeRace.s.sol   # fee race demo
+src/Ping.sol           # on-chain target (ping() updates lastCaller)
+script/Deploy.s.sol    # deploy only (used by demo.sh)
+script/FeeRace.s.sol   # forge-only alternative
+demo.sh                # live demo — async cast send, clear gas prices
 test/Ping.t.sol        # unit test
 ```
 

@@ -23,6 +23,11 @@ contract FeeRaceScript is Script {
         console2.log("Ping deployed at", address(ping));
         vm.stopBroadcast();
 
+        // NOTE: forge script --broadcast sends txs one-by-one and waits for each
+        // to mine, so 1 vs 50 gwei is hard to see in txpool. For the LIVE demo use:
+        //   ./demo.sh
+        // (async cast send with --legacy --gas-price)
+
         // Low tip first (enters pool earlier, but weaker bid)
         vm.txGasPrice(1 gwei);
         vm.startBroadcast(LOW_TIP_KEY);
