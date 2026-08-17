@@ -6,6 +6,14 @@
 
 Pair with **Lab B:** [`sandwich-attack`](https://github.com/suyash101101/sandwich-attack) — shows how bots profit from that visibility.
 
+**Documentation in this repo:**
+
+| File | Who it is for |
+|------|---------------|
+| [`README.md`](./README.md) | Quick setup + run commands (start here) |
+| [`GUIDE.md`](./GUIDE.md) | Full explanation, privacy angle, layperson analogies |
+| [`SPEAKER_NOTES.md`](./SPEAKER_NOTES.md) | Presenter script — what to say live, timing, Q&A |
+
 ---
 
 ## The privacy crux
