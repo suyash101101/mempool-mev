@@ -1,23 +1,28 @@
-# Mempool & MEV Lab (Lab A)
+# Lab A — Mempool & Fee Priority
 
-Road to Devcon · Session 1 · NITK Surathkal
+**Web3 Uncovered · Road to Devcon · Session 1**
 
-See how **pending transactions compete on fees** inside a local mempool (Anvil txpool). This is the conceptual lab. The attack simulation is in the sibling repo [`sandwich-attack`](https://github.com/suyash101101/sandwich-attack).
+> What happens between **Confirm** and **Confirmed**? Your transaction sits in a **public waiting room** (the mempool) where anyone can read it and block builders pick by fee.
 
----
-
-## What you'll learn
-
-1. Pending txs sit in a **public waiting room** (mempool / txpool)
-2. **Higher tip ≈ higher priority** for inclusion
-3. Anyone with RPC access can **inspect** that waiting room
+Pair with **Lab B:** [`sandwich-attack`](https://github.com/suyash101101/sandwich-attack) — shows how bots profit from that visibility.
 
 ---
 
-## Prerequisites
+## The privacy crux
+
+| Fact | Implication |
+|------|-------------|
+| Pending txs are **public** | Amount, target contract, and calldata are visible before confirmation |
+| Block space is scarce | Higher fee tip → higher inclusion priority |
+| RPC nodes expose the txpool | Searchers watch the same feed you will inspect below |
+
+This lab does **not** run an attack. It proves the infrastructure that makes MEV possible.
+
+---
+
+## Prerequisites (once)
 
 ```bash
-# Install Foundry (once)
 curl -L https://foundry.paradigm.xyz | bash
 foundryup
 
@@ -33,22 +38,28 @@ anvil --version
 git clone https://github.com/suyash101101/mempool-mev.git
 cd mempool-mev
 
-forge install foundry-rs/forge-std --no-commit
+forge install foundry-rs/forge-std
 forge build
 forge test -vv
 ```
 
----
+Expected:
 
-## Run the fee race (e2e)
-
-**Terminal A** — slow blocks so you can peek at the pool:
-
-```bash
-anvil --block-time 8
+```text
+[PASS] test_pingIncrements()
 ```
 
-**Terminal B** — deploy + submit competing pings:
+---
+
+## Run end-to-end
+
+### Terminal A — slow blocks (time to inspect the pool)
+
+```bash
+anvil --block-time 8 --port 8545
+```
+
+### Terminal B — deploy + submit two competing txs
 
 ```bash
 forge script script/FeeRace.s.sol:FeeRaceScript \
@@ -57,44 +68,44 @@ forge script script/FeeRace.s.sol:FeeRaceScript \
   -vv
 ```
 
-**Optional — inspect the mempool while waiting:**
+### Terminal C (optional) — peek at the public mempool
+
+Run **after** Terminal B submits, **before** the next block mines:
 
 ```bash
 cast rpc txpool_content --rpc-url http://127.0.0.1:8545
 ```
 
-**After a block mines:**
+### Verify the high-tip tx won
+
+Replace `<PING_ADDR>` with the address printed by the script:
 
 ```bash
-cast block latest --rpc-url http://127.0.0.1:8545
+cast call <PING_ADDR> "lastCaller()(address)" --rpc-url http://127.0.0.1:8545
+# Expected: 0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC  (Anvil account #2, 50 gwei)
 ```
-
-Look at transaction order / gas prices in that block.
 
 ---
 
-## Mental model
+## What the script does
 
-| You do | Real network |
-|--------|----------------|
-| `anvil` txpool | Public mempool |
-| `cast rpc txpool_content` | Explorers / searcher bots watching pending txs |
-| High tip vs low tip | Priority fee auction (same idea as gas wars) |
-
-MEV searchers watch this feed continuously. Lab B (`sandwich-attack`) shows how they monetize it.
+1. Deploys `Ping.sol` (increments a counter)
+2. Account #1 calls `ping()` at **1 gwei**
+3. Account #2 calls `ping()` at **50 gwei**
+4. Both wait in the txpool; the higher tip gets priority in the next block
 
 ---
 
 ## Layout
 
 ```text
-src/Ping.sol              # callable target
-script/FeeRace.s.sol      # deploy + two competing txs
-test/Ping.t.sol
+src/Ping.sol           # on-chain target
+script/FeeRace.s.sol   # fee race demo
+test/Ping.t.sol        # unit test
 ```
 
 ---
 
 ## Safety
 
-Anvil keys in the script are **public test keys**. Never fund them on mainnet.
+Anvil private keys are **public test keys**. Never fund them on mainnet.

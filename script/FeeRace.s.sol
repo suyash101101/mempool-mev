@@ -37,6 +37,9 @@ contract FeeRaceScript is Script {
         console2.log("Submitted HIGH tip ping from", vm.addr(HIGH_TIP_KEY));
         vm.stopBroadcast();
 
+        console2.log("=== WHY THIS MATTERS FOR PRIVACY ===");
+        console2.log("Both txs sat in the PUBLIC txpool before a block was mined.");
+        console2.log("Anyone with RPC access can read pending txs - same as mainnet searchers.");
         console2.log("=== NEXT ===");
         console2.log("1) While Anvil is slow: cast rpc txpool_content");
         console2.log("2) After block mines: cast call", address(ping), "lastCaller()(address)");
