@@ -4,3 +4,11 @@ broadcast/
 lib/
 .env
 .DS_Store
+
+# Local speaker prep — never commit
+SPEAKER_NOTES.md
+KOHAKU_SPEAKER_NOTES.md
+GUIDE.md
+STUDY_GUIDE.md
+STUDY_GUIDE.pdf
+*.local.md
