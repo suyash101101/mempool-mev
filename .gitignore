@@ -5,6 +5,8 @@ lib/
 .env
 .DS_Store
 
+scratch/
+
 # Local speaker prep — never commit
 SPEAKER_NOTES.md
 KOHAKU_SPEAKER_NOTES.md
